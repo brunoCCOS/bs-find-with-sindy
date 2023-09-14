@@ -2,8 +2,9 @@ import itertools
 
 import numpy as np
 import pysindy as ps
-
 from utils.print_utils import print_model
+from sklearn.model_selection import KFold
+
 
 def threshold_remove(data,coef,target,threshold = 0.1,axis=1):
     #Iterate through all terms and force to 0 the ones which does not change the norm of the matrix more than the threshold
@@ -45,9 +46,12 @@ def grind_hyper_search(u, u_dot, lib, opt, param_grid, num_folds=3, **model_keya
         for train_index, test_index in kf.split(u):
             train_lib = u[train_index]
             test_lib = u[test_index]
-            train_set = u_dot[train_index]
-            test_set = u_dot[test_index]
-
+            if u_dot is not None:
+                train_set = u_dot[train_index]
+                test_set = u_dot[test_index]
+            else:
+                train_set = None
+                test_set = None
             # Create an instance of the optimizer with the params of grind
             optimizer = opt(**comb)
 
