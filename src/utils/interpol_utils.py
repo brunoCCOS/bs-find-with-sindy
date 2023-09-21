@@ -90,7 +90,7 @@ def bicubic_interpolation(u, x, y, a, b):
     yi = np.linspace(min(y), max(y), b)
     xi, yi = np.meshgrid(xi, yi)
 
-    return interpolate.griddata((x, y), u, (xi, yi), method='cubic')
+    return interpolate.griddata((x, y), u, (xi, yi), method='cubic', rescale=True)
 
 def thin_plate_splines_interpolation(u, x, y, a, b):
     rbf = interpolate.Rbf(x, y, u, function='thin_plate')
