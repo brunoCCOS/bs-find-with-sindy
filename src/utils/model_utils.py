@@ -7,29 +7,6 @@ from sklearn.model_selection import KFold
 import numpy.linalg as la
 
 
-def threshold_remove(data,coef,target,threshold = 0.1,axis=1):
-    print(data.shape)
-    #Iterate through all terms and force to 0 the ones which does not change the norm of the matrix more than the threshold
-    for i in range(len(coef)):
-        coef_ = np.delete(coef,i,axis=0)
-        data_ = np.delete(data,i,axis=axis)
-        matrix_org = data @ coef
-        matrix_tg = data_ @ coef_
-        if np.abs(np.linalg.norm(matrix_tg) - np.linalg.norm(matrix_org))/np.linalg.norm(matrix_org) < threshold:
-            coef[i] = 0. 
-    # Optimize the coefficients of the remaining terms
-    idx_null = np.where(coef == 0)[0]
-    idx_not_null = np.where(coef)
-    data_ = np.delete(data,idx_null,axis=axis)
-    if len(data_.shape)> 2:
-        x = np.reshape(data_,(data_.shape[0]*data_.shape[1],data_.shape[2]))
-    else:
-        x = data_
-
-    y = np.ravel(target)
-    c, r, rank, s = np.linalg.lstsq(x, y, rcond=None)
-    coef[idx_not_null] = c
-    return coef
 def grind_hyper_search(u, u_dot, lib, opt, param_grid, num_folds=3, **model_keyargs) -> None:
     # Create an empty dictionary to store results
     results = {}

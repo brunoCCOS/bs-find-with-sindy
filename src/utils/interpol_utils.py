@@ -67,6 +67,13 @@ def polynomial_interpolation(u, x, y, a, b, degree=3):
     
     return zi
 
+def smooth_spline_interpolation(u,x,y,a,b):
+    xi = np.linspace(min(x), max(x), a)
+    yi = np.linspace(min(y), max(y), b)
+    tck = interpolate.bisplrep(x, y, u, s=0)
+    znew = interpolate.bisplev(xi, yi, tck)
+    return znew
+
 def linear_interpolation(u, x, y, a, b):
     f = interpolate.interp2d(x, y, u, kind='linear')
     xi = np.linspace(min(x), max(x), a)
@@ -99,7 +106,7 @@ def thin_plate_splines_interpolation(u, x, y, a, b):
     xi, yi = np.meshgrid(xi, yi)
     return rbf(xi, yi)
 
-def kriging_interpolation(x, y, u, a, b):
+def kriging_interpolation(u, x, y, a, b):
     # Create a spatial-temporal grid
     grid_x = np.linspace(min(x), max(x), a)
     grid_y = np.linspace(min(y), max(y), b)
