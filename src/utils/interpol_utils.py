@@ -72,7 +72,7 @@ def smooth_spline_interpolation(u,x,y,a,b):
     yi = np.linspace(min(y), max(y), b)
     tck = interpolate.bisplrep(x, y, u, s=0)
     znew = interpolate.bisplev(xi, yi, tck)
-    return znew
+    return znew.T
 
 def linear_interpolation(u, x, y, a, b):
     f = interpolate.interp2d(x, y, u, kind='linear')

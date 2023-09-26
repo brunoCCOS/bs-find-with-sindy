@@ -62,26 +62,22 @@ def grind_hyper_search(u, u_dot, lib, opt, param_grid, num_folds=3, **model_keya
     print_model(coefs[best_hyperparameters], lib.get_feature_names())
 
 
-def IterPSDN(u,
-                        u_actual,
-                        d,
-                        sigma_estimate,
-                        A,
-                        max_iter=10,
-                        alpha=.1,
-                        use_actual_P=False,
-                        center_Theta=False,
-                        check_diverge=True):
+def iter_psdn(u,
+            lib,
+            sigma_estimate,
+            A,
+            max_iter=10,
+            alpha=.1,
+            center_Theta=False,
+            check_diverge=False):
     """Perform projection-based denoising.
 
     Args:
         u (d X N np.array): description
-        u_actual (d X N np.array): description
-        d (int):
+        lib: Library object to construct the Theta matrix
         sigma_estimate (d np.array):
         A ():
         max_iter (int):
-        plot (bool):
         alpha (float in [0,1]):
 
     Returns:
@@ -95,25 +91,16 @@ def IterPSDN(u,
     u_err_vec = []
     sigma_vec = []
     sum_vec = []
-    u_norm = la.norm(u_actual, axis=1)
 
     for i in range(max_iter):
 
-        # Record error history
-        u_err_vec.append(la.norm(u_proj - u_actual, axis=1) / u_norm)
-
-        # Make Phi which is A\Theta and a column of ones
-        if use_actual_P is True:
-            Theta_temp = mlu.make_Theta(u_actual, d=d)
-        else:
-            Theta_temp = mlu.make_Theta(u_proj, d=d)
-            if center_Theta:
-                Theta_temp = mlu.center_Theta(Theta_temp, d, m,
-                                              sigma_estimate[0]**2)
+        Theta_temp = lib.fit_transform(u_proj)
+        if center_Theta:
+            Theta_temp = mlu.center_Theta(Theta_temp, d, m,
+                                            sigma_estimate[0]**2)
 
         Phi = A @ Theta_temp
-        if d == 0:
-            Phi = Phi.reshape(-1, 1)
+
         Phi = np.hstack((np.ones(N).reshape(-1, 1), Phi))
 
         # Use SVD to perform projeciton
@@ -130,13 +117,12 @@ def IterPSDN(u,
 
         # Check for divergence and break if sigma_pred is too large
         if check_diverge:
-            if use_actual_P is not True and max_iter > 1:
-                update = (sigma_pred < sigma_estimate)
-                if sum(update) == 0:
-                    print('WARNING: HIT MAX SIGMA')
-                    break
-                # If varaince too large don't perform projection
-                u_proj_new[update == 0, :] = u_proj[update == 0, :]
+            update = (sigma_pred < sigma_estimate)
+            if sum(update) == 0:
+                print('WARNING: HIT MAX SIGMA')
+                break
+            # If varaince too large don't perform projection
+            u_proj_new[update == 0, :] = u_proj[update == 0, :]
 
         n = np.min((np.size(u_proj_new, 1), np.size(u_proj, 1)))
         true_norm = la.norm(u_proj_new[:, :n], axis=1)
