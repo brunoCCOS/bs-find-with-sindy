@@ -99,12 +99,6 @@ def bicubic_interpolation(u, x, y, a, b):
 
     return interpolate.griddata((x, y), u, (xi, yi), method='cubic', rescale=True)
 
-def thin_plate_splines_interpolation(u, x, y, a, b):
-    rbf = interpolate.Rbf(x, y, u, function='thin_plate')
-    xi = np.linspace(min(x), max(x), a)
-    yi = np.linspace(min(y), max(y), b)
-    xi, yi = np.meshgrid(xi, yi)
-    return rbf(xi, yi)
 
 def kriging_interpolation(u, x, y, a, b):
     # Create a spatial-temporal grid
@@ -139,14 +133,17 @@ def loess_interpolation(u, x, y, a, b):
     
     return zi
 
-def rbf_interpolation(u, x, y, a, b):
+def rbf_interpolation(u, x, y, a, b,kernel='cubic'):
     xi = np.linspace(min(x), max(x), a)
     yi = np.linspace(min(y), max(y), b)
     xi, yi = np.meshgrid(xi, yi)
 
+    # Create an RBFInterpolator with the cubic kernel (phi(r) = r^3)
+    rbf = interpolate.RBFInterpolator(list(zip(x, y)), u, kernel=kernel)
+
     # Interpolate the option prices using RBF
-    rbf = interpolate.Rbf(x, y, u)
-    zi = rbf(xi, yi)
+    xy_points = np.column_stack((xi.ravel(), yi.ravel()))  # Flatten the grid points
+    zi = rbf(xy_points).reshape(xi.shape)  # Reshape the result to match xi shape
 
     return zi
 
