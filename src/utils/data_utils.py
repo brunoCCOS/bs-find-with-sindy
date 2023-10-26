@@ -35,6 +35,21 @@ def black_scholes_call(S, X, T, r, sigma):
     call_price = S * norm.cdf(d1) - X * np.exp(-r * T) * norm.cdf(d2)
     return call_price
 
+def transform_to_heat_eq(u,S,t,sigma,r):
+    x = np.log(S)
+    T = np.max(t)
+    tau = (sigma**2)/2*(T-t)
+
+    k = 2*r/(sigma**2)
+
+    alpha = -(k - 1)/2
+    beta = -(k+1)**2/4
+
+    v = u/np.exp(alpha*x + beta*tau)
+
+    return v, x,tau
+
+
 def numerical_partial_black_scholes(V,r,sigma):
     '''
     Numerical calculation of the black-scholes through DURA-MOS¸NEAGU

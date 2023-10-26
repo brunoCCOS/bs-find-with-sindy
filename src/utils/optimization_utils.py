@@ -47,7 +47,6 @@ def MLSQT(G, b, Lambda,tol = 1e-5):
 
 
 def threshold_remove(data,coef,target,threshold = 0.1,axis=1):
-    print(data.shape)
     #Iterate through all terms and force to 0 the ones which does not change the norm of the matrix more than the threshold
     for i in range(len(coef)):
         coef_ = np.delete(coef,i,axis=0)
