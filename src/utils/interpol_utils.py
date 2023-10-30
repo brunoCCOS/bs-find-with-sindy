@@ -184,7 +184,7 @@ def rbf_interpolation(u, x, y, a, b, kernel='cubic'):
     return zi,xi,yi
 
 
-def calc_error(interpol_u,u):
+def calc_error_2d(interpol_u,u,show=False):
     # Calculate the squared difference between interpol_u.T and u while handling NaN values
     squared_diff = (interpol_u - u.reshape((u.shape[0], u.shape[1])))**2
 
@@ -203,8 +203,31 @@ def calc_error(interpol_u,u):
 
     # Calculate RMSE
     rmse = np.sqrt(np.mean(np.sum(squared_diff, axis=1)))
+    if show:
+        print('RSE:', rse)
+        print('RMSE:', rmse)
+    return(rse,rmse)
 
-    print('Interpolation error for Original u')
-    print('RSE:', rse)
-    print('RMSE:', rmse)
+
+def calc_error_1d(interpol_u,u,show=False):
+    # Calculate the squared difference between interpol_u.T and u while handling NaN values
+    squared_diff = (interpol_u - u)**2
+
+    # Calculate the squared difference between interpol_u.T and u while handling NaN values
+    squared_diff_mean = (interpol_u - u.mean())**2
+
+    # Replace NaN values with 0 in the squared difference matrix
+    squared_diff[np.isnan(squared_diff)] = 0
+
+    # Replace NaN values with 0 in the squared difference matrix
+    squared_diff_mean[np.isnan(squared_diff_mean)] = 0
+
+    # Calculate RSE
+    rse = np.sum(squared_diff) / np.sum(squared_diff_mean)
+
+    # Calculate RMSE
+    rmse = np.sqrt(np.mean(np.sum(squared_diff, axis=0)))
+    if show:
+        print('RSE:', rse)
+        print('RMSE:', rmse)
     return(rse,rmse)

@@ -1,4 +1,4 @@
 # ignore ALL pycache files
 **/__pycache__
 **/cp.log
-**/brackets.deb
+**/brackets.deb 
