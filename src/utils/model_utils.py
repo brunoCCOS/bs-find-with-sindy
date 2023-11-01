@@ -3,8 +3,52 @@ import itertools
 import numpy as np
 import pysindy as ps
 from utils.print_utils import print_model
-from sklearn.model_selection import KFold
+from sklearn.model_selection import train_test_split, KFold
+
 import numpy.linalg as la
+
+def best_hyperparameters(X, u, lambdas, thresholds, n_splits=5):
+    """
+    Find the best lambda and threshold for SINDy using cross-validation.
+
+    Parameters:
+    - X: The independent variable data
+    - u: The dependent variable data
+    - lambdas: List of lambda values to test
+    - thresholds: List of threshold values to test
+    - n_splits: Number of splits for cross-validation
+
+    Returns:
+    - best_lambda: The best lambda value
+    - best_threshold: The best threshold value
+    """
+
+    # Split data into training and validation sets
+    X_train, X_val, u_train, u_val = train_test_split(X, u, test_size=0.2, random_state=42)
+    print(X_train.shape,u_train.shape)
+    best_score = float('inf')
+    best_lambda = None
+    best_threshold = None
+
+    for l in lambdas:
+        for t in thresholds:
+            # Define the SINDy optimizer with the current lambda and threshold
+            optimizer = ps.optimizers.STLSQ(threshold=t, alpha=l).fit(X_train,u_train)
+            
+            
+            # Predict on the validation set
+            u_pred = optimizer.coef_[0] @ X_val
+            
+            # Calculate the mean squared error on the validation set
+            mse = np.mean((u_val - u_pred)**2)
+            
+            # Update the best hyperparameters if current MSE is lower
+            if mse < best_score:
+                best_score = mse
+                best_lambda = l
+                best_threshold = t
+
+    return best_lambda, best_threshold
 
 
 def grind_hyper_search(u, u_dot, lib, opt, param_grid, num_folds=3, **model_keyargs) -> None:
