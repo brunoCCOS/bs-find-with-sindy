@@ -37,7 +37,7 @@ def best_hyperparameters(X, u, lambdas, thresholds, n_splits=5):
             
             
             # Predict on the validation set
-            u_pred = optimizer.coef_[0] @ X_val
+            u_pred = X_val @ optimizer.coef_[0]
             
             # Calculate the mean squared error on the validation set
             mse = np.mean((u_val - u_pred)**2)
