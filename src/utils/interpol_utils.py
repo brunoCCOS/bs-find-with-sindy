@@ -1,3 +1,153 @@
+
+
+import numpy as np
+from scipy import interpolate
+import statsmodels.api as sm
+from pykrige.ok import OrdinaryKriging
+from utils.optimization_utils import *
+from utils.data_utils import *
+from scipy.spatial.distance import cdist
+from scipy.interpolate import SmoothBivariateSpline,Rbf, RectBivariateSpline
+from scipy.stats import norm
+
+def smooth_spline_interpolation(points, values):
+    # Ensure that the input is a numpy array
+    points = np.array(points)
+    values = np.array(values)
+
+    # Extract the x and y coordinates
+    x = points[:, 0]
+    y = points[:, 1]
+    
+    # Create the spline interpolator
+    spline = SmoothBivariateSpline(x, y, values)
+    
+    # Function to compute the surface and derivatives at a given point
+    def compute_at_point(x, y):
+        surface = spline(x, y)
+        derivative_x = spline(x, y, dx=1)
+        derivative_y = spline(x, y, dy=1)
+        derivative_xx = spline(x, y, dx=2)
+        derivative_yy = spline(x, y, dy=2)
+        return surface, derivative_x, derivative_y, derivative_xx, derivative_yy
+    
+    return compute_at_point
+
+# Re-define the RBF interpolation function to perform on a grid
+def rbf_interpolation_on_grid(sub_SS, sub_TT, sub_call_prices, SS, TT):
+    # RBF interpolation
+    rbf = Rbf(sub_SS, sub_TT, sub_call_prices, function='cubic', smooth=0.1)
+    # Interpolated call prices on the grid
+    rbf_call_prices = rbf(SS, TT)
+    return rbf_call_prices
+
+def RBFN_2d(X, Y, rbf_class, epsilon=1e-6):
+    n = Y.shape[0]
+
+    # Compute the distance matrix between all pairs of center points
+    dist_matrix = cdist(X, X)
+
+    # Add epsilon to the diagonal for numerical stability
+    np.fill_diagonal(dist_matrix, dist_matrix.diagonal() + epsilon)
+
+    # Compute the RBF matrix
+    RBF_matrix = rbf_class.eval_func(dist_matrix)
+
+    # Solve for the coefficients using linear least squares
+    coefficients, _, _, _ = np.linalg.lstsq(RBF_matrix, Y)
+
+    def compute_at_point(x, y):
+        grid_points = np.column_stack((x, y))
+        m = grid_points.shape[0]
+
+        interpolated_values = np.zeros(m)
+        interpolated_values_x = np.zeros(m)
+        interpolated_values_xx = np.zeros(m)
+        interpolated_values_y = np.zeros(m)
+
+        for i in range(m):
+            # Compute distances from the current grid point to all centers
+            distances = cdist([grid_points[i]], X).ravel()
+
+            # Evaluate the radial basis function for these distances
+            g_i = rbf_class.eval_func(distances)
+            interpolated_values[i] = np.dot(coefficients, g_i)
+
+            # Compute first and second derivatives for x
+            h_i_x = rbf_class.eval_func_derivative_2d(np.atleast_2d(distances), axis=1)
+            H_i_xx = rbf_class.eval_func_2_derivative_2d(np.atleast_2d(distances), axis=1)
+            interpolated_values_x[i] = np.dot(coefficients, h_i_x)
+            interpolated_values_xx[i] = np.dot(coefficients, H_i_xx)
+
+            # Compute first and second derivatives for y
+            h_i_y = rbf_class.eval_func_derivative_2d(np.atleast_2d(distances), axis=2)
+            H_i_yy = rbf_class.eval_func_2_derivative_2d(np.atleast_2d(distances), axis=2)
+            interpolated_values_y[i] = np.dot(coefficients, h_i_y)
+            # interpolated_values_yy[i] = np.dot(coefficients, H_i_yy)  # If needed
+
+        return interpolated_values, interpolated_values_x, interpolated_values_xx, interpolated_values_y, coefficients
+
+    return compute_at_point
+
+
+
+def IRBFN2_1d(X,Y,rbf_class,epsilon = 1e-6):
+    '''
+    Function for Indirect Radial basis function network
+    args:
+    X: set of center points
+    Y: target function evaluated at X
+    g: radial basis function
+    h: Primitive of the rbf
+    H: Primitive of h
+    epsilon: staiblity control term
+    '''
+    # Create a grid of points for interpolation
+    x_max, y_max = np.max(X), np.max(Y)
+
+    x_min = np.min(X)
+    x_grid= np.linspace(x_min, x_max, 100)
+
+    n = Y.shape[0]
+    m = x_grid.shape[0]
+
+    X_2d = np.hstack((X.reshape(-1,1),np.zeros((n,1))))
+    dist_matrix = cdist(X_2d,X_2d)
+    
+    # Add epsilon to the diagonal of the distance matrix to avoid singularities
+    np.fill_diagonal(dist_matrix, epsilon)
+
+    # Compute the RBF matrix
+    RBF_matrix = rbf_class.eval_func_2_int_1d(dist_matrix)
+    
+    #Add columns for constant C1 and C2
+    constant_matrix = np.hstack((X.reshape(-1,1),np.ones(n).reshape(-1,1)))
+
+
+    full_matrix = np.hstack((RBF_matrix,constant_matrix))
+    
+    # Solve for the coefficients using linear equations (Ax = Y)
+    coefficients = solve_SVD_system(full_matrix, Y)
+
+    # Interpolate values for the grid points
+    interpolated_values = np.zeros(m)
+    # Interpolate values for the first derivative grid points
+    interpolated_values_x = np.zeros(m)
+    # Interpolate values for the seconde derivative grid points
+    interpolated_values_xx = np.zeros(m)
+
+    for i in range(m):
+        distances = np.abs(X - x_grid[i]) + epsilon
+        H_i = np.hstack((rbf_class.eval_func_2_int_1d(distances),x_grid[i],1))
+        h_i = np.hstack((rbf_class.eval_func_int_1d(distances),1))
+        g_i = rbf_class.eval_func(distances)
+        interpolated_values[i] = np.sum(coefficients * H_i)
+        interpolated_values_x[i] = np.sum(coefficients[:-1] * h_i)
+        interpolated_values_xx[i] = np.sum(coefficients[:-2] * g_i)
+
+    return x_grid, interpolated_values,interpolated_values_x,interpolated_values_xx,coefficients
+
+
 """
 Interpolation Methods
 
@@ -51,11 +201,6 @@ Note: The choice of interpolation method should be based on the nature of your d
 """
 
 
-import numpy as np
-from scipy import interpolate
-import statsmodels.api as sm
-from pykrige.ok import OrdinaryKriging
-
 def polynomial_interpolation(u, x, y, a, b, degree=3):
     # Fit a polynomial to the data
     coefficients = np.polyfit((x,y), u, degree)
@@ -70,13 +215,6 @@ def polynomial_interpolation(u, x, y, a, b, degree=3):
     zi = polynomial(xi, yi)
     
     return zi,xi,yi
-
-def smooth_spline_interpolation(u,x,y,a,b):
-    xi = np.linspace(min(x), max(x), a)
-    yi = np.linspace(min(y), max(y), b)
-    tck = interpolate.bisplrep(x, y, u, s=0)
-    znew = interpolate.bisplev(xi, yi, tck)
-    return znew.T,xi,yi
 
 def linear_interpolation(u, x, y, a, b):
     f = interpolate.interp2d(x, y, u, kind='linear')
@@ -184,50 +322,3 @@ def rbf_interpolation(u, x, y, a, b, kernel='cubic'):
     return zi,xi,yi
 
 
-def calc_error_2d(interpol_u,u,show=False):
-    # Calculate the squared difference between interpol_u.T and u while handling NaN values
-    squared_diff = (interpol_u - u.reshape((u.shape[0], u.shape[1])))**2
-
-    # Calculate the squared difference between interpol_u.T and u while handling NaN values
-    squared_diff_mean = (interpol_u - u.mean())**2
-
-    # Replace NaN values with 0 in the squared difference matrix
-    squared_diff[np.isnan(squared_diff)] = 0
-
-    # Replace NaN values with 0 in the squared difference matrix
-    squared_diff_mean[np.isnan(squared_diff_mean)] = 0
-
-
-    # Calculate RSE
-    rse = np.sum(squared_diff) / np.sum(squared_diff_mean)
-
-    # Calculate RMSE
-    rmse = np.sqrt(np.mean(np.sum(squared_diff, axis=1)))
-    if show:
-        print('RSE:', rse)
-        print('RMSE:', rmse)
-    return(rse,rmse)
-
-
-def calc_error_1d(interpol_u,u,show=False):
-    # Calculate the squared difference between interpol_u.T and u while handling NaN values
-    squared_diff = (interpol_u - u)**2
-
-    # Calculate the squared difference between interpol_u.T and u while handling NaN values
-    squared_diff_mean = (interpol_u - u.mean())**2
-
-    # Replace NaN values with 0 in the squared difference matrix
-    squared_diff[np.isnan(squared_diff)] = 0
-
-    # Replace NaN values with 0 in the squared difference matrix
-    squared_diff_mean[np.isnan(squared_diff_mean)] = 0
-
-    # Calculate RSE
-    rse = np.sum(squared_diff) / np.sum(squared_diff_mean)
-
-    # Calculate RMSE
-    rmse = np.sqrt(np.mean(np.sum(squared_diff, axis=0)))
-    if show:
-        print('RSE:', rse)
-        print('RMSE:', rmse)
-    return(rse,rmse)

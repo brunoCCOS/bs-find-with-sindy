@@ -46,6 +46,19 @@ def MLSQT(G, b, Lambda,tol = 1e-5):
     return w,optimal_lambda
 
 
+def solve_SVD_system(A, b):
+    # Compute the singular values and vectors
+    U, s, VT = np.linalg.svd(A)
+    # Compute the inverse of the singular values matrix
+    S_inv = np.diag(1 / s)
+    # Compute the pseudoinverse of A
+    A_inv = VT.T @ S_inv @ U.T
+    # Solve for x
+    x = A_inv @ b
+    return x
+
+
+
 def threshold_remove(data,coef,target,threshold = 0.1,axis=1):
     #Iterate through all terms and force to 0 the ones which does not change the norm of the matrix more than the threshold
     for i in range(len(coef)):
