@@ -2,13 +2,12 @@
 
 import numpy as np
 from scipy import interpolate
-import statsmodels.api as sm
 from pykrige.ok import OrdinaryKriging
 from utils.optimization_utils import *
 from utils.data_utils import *
 from scipy.spatial.distance import cdist
-from scipy.interpolate import SmoothBivariateSpline,Rbf, RectBivariateSpline
-from scipy.stats import norm
+from scipy.interpolate import SmoothBivariateSpline
+
 
 def smooth_spline_interpolation(points, values):
     # Ensure that the input is a numpy array
@@ -33,14 +32,6 @@ def smooth_spline_interpolation(points, values):
     
     return compute_at_point
 
-# Re-define the RBF interpolation function to perform on a grid
-def rbf_interpolation_on_grid(sub_SS, sub_TT, sub_call_prices, SS, TT):
-    # RBF interpolation
-    rbf = Rbf(sub_SS, sub_TT, sub_call_prices, function='cubic', smooth=0.1)
-    # Interpolated call prices on the grid
-    rbf_call_prices = rbf(SS, TT)
-    return rbf_call_prices
-
 def RBFN_2d(X, Y, rbf_class, epsilon=1e-6):
     n = Y.shape[0]
 
@@ -57,9 +48,9 @@ def RBFN_2d(X, Y, rbf_class, epsilon=1e-6):
     coefficients, _, _, _ = np.linalg.lstsq(RBF_matrix, Y)
 
     def compute_at_point(x, y):
-        grid_points = np.column_stack((x, y))
+        x_grid, y_grid = np.meshgrid(x, y)
+        grid_points = np.column_stack((x_grid.ravel(), y_grid.ravel()))
         m = grid_points.shape[0]
-
         interpolated_values = np.zeros(m)
         interpolated_values_x = np.zeros(m)
         interpolated_values_xx = np.zeros(m)
@@ -67,10 +58,10 @@ def RBFN_2d(X, Y, rbf_class, epsilon=1e-6):
 
         for i in range(m):
             # Compute distances from the current grid point to all centers
-            distances = cdist([grid_points[i]], X).ravel()
-
+            distances = X - grid_points[i]
+            distances[distances == 0] = epsilon
             # Evaluate the radial basis function for these distances
-            g_i = rbf_class.eval_func(distances)
+            g_i = rbf_class.eval_func(np.linalg.norm(distances,axis=1))
             interpolated_values[i] = np.dot(coefficients, g_i)
 
             # Compute first and second derivatives for x
@@ -81,8 +72,8 @@ def RBFN_2d(X, Y, rbf_class, epsilon=1e-6):
 
             # Compute first and second derivatives for y
             h_i_y = rbf_class.eval_func_derivative_2d(np.atleast_2d(distances), axis=2)
-            H_i_yy = rbf_class.eval_func_2_derivative_2d(np.atleast_2d(distances), axis=2)
-            interpolated_values_y[i] = np.dot(coefficients, h_i_y)
+            if grid_points[i,1] != 0:
+                interpolated_values_y[i] = np.dot(coefficients, h_i_y)
             # interpolated_values_yy[i] = np.dot(coefficients, H_i_yy)  # If needed
 
         return interpolated_values, interpolated_values_x, interpolated_values_xx, interpolated_values_y, coefficients
@@ -199,22 +190,6 @@ Returns:
 
 Note: The choice of interpolation method should be based on the nature of your data and specific requirements.
 """
-
-
-def polynomial_interpolation(u, x, y, a, b, degree=3):
-    # Fit a polynomial to the data
-    coefficients = np.polyfit((x,y), u, degree)
-    polynomial = np.poly1d(coefficients)
-
-
-    xi = np.linspace(min(x), max(x), a)
-    yi = np.linspace(min(y), max(y), b)
-    xi, yi = np.meshgrid(xi, yi)
-
-    # Interpolate the option prices using the polynomial
-    zi = polynomial(xi, yi)
-    
-    return zi,xi,yi
 
 def linear_interpolation(u, x, y, a, b):
     f = interpolate.interp2d(x, y, u, kind='linear')
